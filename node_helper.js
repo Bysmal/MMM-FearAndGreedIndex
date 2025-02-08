@@ -1,5 +1,5 @@
 var NodeHelper = require("node_helper");
-var fetch = require("node-fetch");
+var https = require("https");
 var fs = require("fs");
 var path = require("path");
 
@@ -56,20 +56,32 @@ module.exports = NodeHelper.create({
         var self = this;
         console.log("Attempting to fetch crypto index data.");
         var url = "https://api.alternative.me/fng/";
+        
+        https.get(url, (response) => {
+            let data = '';
 
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                if (data && data.data && data.data.length > 0) {
-                    var indexData = data.data[0];
-                    console.log("Sending CRYPTO_INDEX_DATA:", indexData);
-                    self.sendSocketNotification("CRYPTO_INDEX_DATA", indexData);
-                } else {
-                    console.error("Unexpected crypto index data format:", data);
-                }
-            })
-            .catch(error => {
-                console.error("Error fetching crypto index:", error);
+            // Handle data chunks as they come in
+            response.on('data', (chunk) => {
+                data += chunk;
             });
+
+            // When all data has been received
+            response.on('end', () => {
+                try {
+                    const parsedData = JSON.parse(data);
+                    if (parsedData && parsedData.data && parsedData.data.length > 0) {
+                        var indexData = parsedData.data[0];
+                        console.log("Sending CRYPTO_INDEX_DATA:", indexData);
+                        self.sendSocketNotification("CRYPTO_INDEX_DATA", indexData);
+                    } else {
+                        console.error("Unexpected crypto index data format:", parsedData);
+                    }
+                } catch (error) {
+                    console.error("Error parsing crypto index data:", error);
+                }
+            });
+        }).on('error', (error) => {
+            console.error("Error fetching crypto index:", error);
+        });
     },
 });
